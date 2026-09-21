@@ -30,7 +30,7 @@ def test_recommendations_lead_with_divide():
 def test_render_and_json():
     r = report()
     md = render_markdown(r)
-    for h in ["# Model health: Caldergate Planning", "## Overall", "## Model at a glance", "## Top findings", "## Recommendations", "## Findings by rule", "Unsigned"]:
+    for h in ["# Model health: Caldergate Planning", "## Overall", "## Model at a glance", "## Findings, grouped by pattern", "## Recommendations", "## Findings by rule", "Unsigned"]:
         assert h in md
     d = r.to_dict()
     assert d["overall"] == r.overall and len(d["scores"]) == 5 and "lint" in d

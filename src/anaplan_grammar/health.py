@@ -42,7 +42,8 @@ class Score:
     category: str
     score: int
     findings: int
-    top: list[str]          # up to 3 one-line findings
+    top: list[str]          # up to 3 one-line patterns
+    patterns: int = 0
 
 
 @dataclass
@@ -56,10 +57,12 @@ class HealthReport:
     recommendations: list[str]
     lint: LintResult
     naming: dict
+    clusters: list = field(default_factory=list)
 
     def to_dict(self):
         return {"model": self.model_name, "generated": self.generated, "overall": self.overall,
                 "scores": [asdict(s) for s in self.scores], "stats": self.stats, "naming": self.naming,
+                "patterns": [c.to_dict() for c in self.clusters],
                 "top_findings": [asdict(f) | {"object": f.object} for f in self.top_findings],
                 "recommendations": self.recommendations, "lint": self.lint.to_dict()}
 
@@ -103,33 +106,44 @@ def _stats(m: Model, g: Graph) -> dict:
     }
 
 
-def _score(findings: list[Finding], size: int) -> int:
-    """Density scoring: severity-weighted findings per 100 line items, mapped
-    through 100 * exp(-density / 12). A model with one major finding per 100
-    line items scores about 78; one per 25 scores about 37. Small models use
-    a floor of 300 line items so a fixture is not punished for being tiny.
-    Scores rank and track; they do not compare models of different purpose."""
+def _score(clusters, size: int) -> int:
+    """Density scoring over PATTERNS, not raw findings. Each cluster weighs
+    severity × (1 + log10(count)), summed per 100 line items, mapped through
+    100 * exp(-density / 12). One decision repeated across 96 month columns
+    counts about 3× one finding, not 96×. Floor of 300 line items so a small
+    model is not punished for being tiny. Scores rank and track; they do not
+    compare models of different purpose."""
     per100 = max(size, 300) / 100.0
-    density = sum(SEV_WEIGHT[f.severity] for f in findings) / per100
+    density = sum(c.weight for c in clusters) / per100
     return max(0, min(100, int(round(100 * math.exp(-density / 12.0)))))
 
 
-def _recommend(by_cat: dict[str, list[Finding]], st: dict) -> list[str]:
+def _recommend(by_cat: dict[str, list[Finding]], st: dict, clusters=()) -> list[str]:
     recs = []
     c = Counter(f.rule for fs in by_cat.values() for f in fs)
+    pat = Counter(cl.rule for cl in clusters)                    # patterns per rule
     crit = [f for fs in by_cat.values() for f in fs if f.severity == "critical"]
+
+    def biggest(rule):
+        cs = [cl for cl in clusters if cl.rule == rule and cl.count > 1]
+        return max(cs, key=lambda cl: cl.count) if cs else None
+
     if crit:
         recs.append(f"Resolve {len(crit)} critical finding(s) first: " + "; ".join(f"{f.object} ({f.rule})" for f in crit[:3]) + ".")
     if c.get("F-MIXED-CLAUSE"):
-        recs.append(f"Split the {c['F-MIXED-CLAUSE']} formulas that mix SUM with LOOKUP or SELECT; Anaplan names this the single largest calculation-time cause.")
+        b = biggest("F-MIXED-CLAUSE")
+        recs.append(f"Split the formulas that mix SUM with LOOKUP or SELECT: {c['F-MIXED-CLAUSE']} line items in {pat['F-MIXED-CLAUSE']} pattern(s)"
+                    + (f", the largest {b.label}" if b else "") + ". Fix the template once and roll it out.")
     if c.get("F-DIVIDE"):
-        recs.append(f"Guard the {c['F-DIVIDE']} unguarded divisions (DIVIDE() or an IF) so a zero denominator cannot put Infinity into a summary.")
+        b = biggest("F-DIVIDE")
+        recs.append(f"Guard the {c['F-DIVIDE']} unguarded divisions with DIVIDE() or an IF" + (f"; {b.label} is one template covering {b.count} of them" if b else "") + ".")
     if c.get("A-LI-COUNT"):
         recs.append(f"Split the {c['A-LI-COUNT']} modules over 50 line items along DISCO lines.")
     if c.get("A-DAISY"):
         recs.append(f"Collapse the {c['A-DAISY']} pass-through chains so each consumer references the source directly.")
     if c.get("A-SUMMARY-ON"):
-        recs.append(f"Turn summaries off on the {c['A-SUMMARY-ON']} large line items no formula aggregates; this is the cheapest workspace saving available.")
+        b = biggest("A-SUMMARY-ON")
+        recs.append(f"Turn summaries off on the {c['A-SUMMARY-ON']} large line items no formula aggregates" + (f", starting with {b.label}" if b else "") + "; the cheapest workspace saving available.")
     if c.get("H-NOTES"):
         recs.append("Add a purpose note to every module, largest first; the next builder starts there.")
     top = st["top_modules_by_cells"][:1]
@@ -146,10 +160,15 @@ def health(model: Model, graph: Graph | None = None, lint_result: LintResult | N
     for f in lr.findings:
         by_cat[CATEGORY_OF.get(f.rule, "governance")].append(f)
     size = st["line_items"]
+    from .cluster import cluster as _cluster
+    clusters = _cluster(lr.findings)
+    by_cat_cl: dict[str, list] = defaultdict(list)
+    for cl in clusters:
+        by_cat_cl[CATEGORY_OF.get(cl.rule, "governance")].append(cl)
     scores = []
     for cat in CATEGORIES:
         fs = by_cat.get(cat, [])
-        sc = _score(fs, size)
+        sc = _score(by_cat_cl.get(cat, []), size)
         if cat == "governance":
             # notes coverage and naming feed governance directly
             nm = _naming(model)
@@ -159,12 +178,13 @@ def health(model: Model, graph: Graph | None = None, lint_result: LintResult | N
                 sc = int(round(100 * (1 - int(a) / max(int(b), 1)) * 0.6 + 100 * nm["share"] * 0.4))
             else:
                 sc = int(round(60 + 40 * nm["share"]))
-        top = [f"{f.object}: {f.message}" for f in fs[:3]]
-        scores.append(Score(cat, sc, len(fs), top))
+        cl_cat = by_cat_cl.get(cat, [])
+        top = [f"{cl.label}: {cl.message}" for cl in cl_cat[:3]]
+        scores.append(Score(cat, sc, len(fs), top, len(cl_cat)))
     overall = int(round(sum(s.score for s in scores) / len(scores)))
     top_findings = [f for f in lr.findings if f.severity in ("critical", "major")][:10]
     return HealthReport(model.name, datetime.date.today().isoformat(), overall, scores, st, top_findings,
-                        _recommend(by_cat, st), lr, _naming(model))
+                        _recommend(by_cat, st, clusters), lr, _naming(model), clusters)
 
 
 def render_markdown(r: HealthReport) -> str:
@@ -173,9 +193,9 @@ def render_markdown(r: HealthReport) -> str:
            f"Generated {r.generated} from the Line Items and Modules exports. Unsigned. "
            f"Scores rank findings and track this model over time; they do not compare models.", "",
            f"## Overall {r.overall} / 100", "",
-           "| Category | Score | Findings | Top finding |", "|---|---|---|---|"]
+           "| Category | Score | Patterns | Findings | Top pattern |", "|---|---|---|---|---|"]
     for s in r.scores:
-        out.append(f"| {s.category} | **{s.score}** | {s.findings} | {s.top[0] if s.top else ''} |")
+        out.append(f"| {s.category} | **{s.score}** | {s.patterns} | {s.findings} | {s.top[0] if s.top else ''} |")
     out += ["", "## Model at a glance", "",
             f"| | |", "|---|---|",
             f"| Modules | {st['modules']} |", f"| Line items | {st['line_items']:,} ({st['with_formula']:,} calculated, {st['inputs']:,} input) |",
@@ -190,9 +210,11 @@ def render_markdown(r: HealthReport) -> str:
     out += ["", "Most depended-on line items:", "", "| Line item | Direct dependents |", "|---|---|"]
     for n, c in st["hubs"][:8]:
         out.append(f"| {n} | {c} |")
-    out += ["", "## Top findings", "", "| Severity | Rule | Object | Finding | Fix |", "|---|---|---|---|---|"]
-    for f in r.top_findings:
-        out.append(f"| {f.severity} | {f.rule} | {f.object} | {f.message} | {f.fix} |")
+    out += ["", "## Findings, grouped by pattern", "",
+            f"{len(r.lint.findings):,} findings collapse to {len(r.clusters)} patterns. A pattern is one rule firing on one line item copied across "
+            "modules (a template) or across the line items of one module (a design decision). Scores are computed on patterns.", ""]
+    from .cluster import render_markdown as _render_clusters
+    out.append(_render_clusters(r.clusters, max_rows=25))
     out += ["", "## Recommendations", ""]
     for i, rec in enumerate(r.recommendations, 1):
         out.append(f"{i}. {rec}")
