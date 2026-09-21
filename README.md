@@ -147,6 +147,27 @@ on both models is a PREVIOUS-based balance pattern, which is the only
 kind Anaplan lets you save; the rule reports those as notes and would
 report a cycle with no time offset as a parser fault.
 
+## Command line
+
+`pip install .` gives you `anaplan-grammar` (or `python -m anaplan_grammar.cli`).
+No dependencies beyond the standard library.
+
+```
+anaplan-grammar parse   "'Costs'.Salary[SUM: 'Staff'.Region]" --refs
+anaplan-grammar explain line_items.csv --modules modules.csv "CAL04 Margin.Margin"
+anaplan-grammar impact  line_items.csv "INP01 Volumes.Price" --depth 3
+anaplan-grammar lineage line_items.csv "OUT01 Board Pack.Margin"
+anaplan-grammar diff    before.csv after.csv --fail-on-change
+anaplan-grammar lint    line_items.csv --modules modules.csv --min-severity major --threshold A-LI-COUNT:max_line_items=40
+anaplan-grammar health  line_items.csv --modules modules.csv --out health.md
+anaplan-grammar stats   line_items.csv
+anaplan-grammar rules
+```
+
+Every command takes `--json` for machine output and `--out FILE`. `lint
+--fail-on major` and `diff --fail-on-change` exit 2 for CI. A line item is
+`Module.Line Item`; a bare name works when it is unique in the model.
+
 ## Layout
 
 ```
@@ -161,6 +182,7 @@ src/anaplan_grammar/
   diff.py                   two models -> change set with blast radius; Markdown and JSON
   lint.py                   19 rules (Anaplan checklist, formula, graph) -> findings; Markdown and JSON
   health.py                 five scores + one-page report from lint, graph and stats
+  cli.py                    the anaplan-grammar command
 corpus/
   extract.py                line-item export -> formulas.jsonl (not committed)
   profile.py                what the corpus contains, before any grammar
@@ -173,12 +195,14 @@ tests/test_graph.py         graph queries on the fictional Caldergate Planning m
 tests/test_diff.py          diff on mutated copies of the fixture
 tests/test_lint.py          lint against the faults planted in the fixture
 tests/test_health.py        scores, recommendations and rendering on the fixture
+tests/test_cli.py           every command against the fixture, text and JSON
 tests/fixtures/             Caldergate Planning line-item and module exports (fictional)
 ```
 
 ## Running
 
 ```
+pip install -e .[dev]
 python -m pytest tests -q
 python corpus/extract.py      # needs your own exports; edit the paths
 python corpus/run_parse.py
