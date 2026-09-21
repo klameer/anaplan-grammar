@@ -1,0 +1,125 @@
+(* Anaplan formula language, reverse-engineered grammar.
+   Version 0.1, 2026-09-21. Derived from Anapedia (operators and constants,
+   operator priority, SUM/LOOKUP/SELECT/TEXTLIST/IF/ITEM/PARENT/FINDITEM/
+   PREVIOUS/COLLECT pages) and a corpus of 13,214 unique formulas from
+   eleven production models. Everything not in Anapedia is marked CORPUS.
+   EBNF, ISO-ish: = definition, | alternative, [ ] optional, { } repetition,
+   ( ) grouping, "x" terminal, (* *) comment. *)
+
+formula        = expression ;
+
+(* --- Operator precedence, Anapedia "Operator priority", lowest first ---
+   OR < AND < (= <>) < (< <= > >=) < & < (+ -) < (* /) < unary < postfix.
+   All binary operators are left-associative. *)
+
+expression     = or_expr ;
+or_expr        = and_expr , { "OR" , and_expr } ;
+and_expr       = eq_expr , { "AND" , eq_expr } ;
+eq_expr        = rel_expr , { ( "=" | "<>" ) , rel_expr } ;
+rel_expr       = concat_expr , { ( "<" | "<=" | ">" | ">=" ) , concat_expr } ;
+concat_expr    = add_expr , { "&" , add_expr } ;
+add_expr       = mul_expr , { ( "+" | "-" ) , mul_expr } ;
+mul_expr       = unary_expr , { ( "*" | "/" ) , unary_expr } ;
+unary_expr     = "NOT" , unary_expr
+               | "-" , unary_expr
+               | postfix_expr ;
+
+(* --- Postfix: the square-bracket aggregation/mapping clause.
+   Anapedia: "Values[SUM: mapping, LOOKUP: mapping, SELECT: item]".
+   CORPUS: clause lists mix kinds (LOOKUP+SELECT 288, LOOKUP+SUM 133,
+   SELECT+SUM 25) even though Anapedia says never to. The grammar
+   accepts them; the linter flags them. *)
+
+postfix_expr   = primary , { bracket_clause } ;
+bracket_clause = "[" , clause , { "," , clause } , "]" ;
+clause         = clause_kind , ":" , expression ;
+clause_kind    = "SUM" | "LOOKUP" | "SELECT" | "AVERAGE" | "MIN" | "MAX"
+               | "ANY" | "ALL" | "FIRSTNONBLANK" | "LASTNONBLANK"
+               | "TEXTLIST" | "STDEVS" | "STDEVP" | "VARS" | "VARP" | "COUNT" ;
+
+(* --- Primary --- *)
+
+primary        = if_expr
+               | function_call
+               | number
+               | string
+               | "TRUE" | "FALSE" | "BLANK"
+               | reference
+               | "(" , expression , ")" ;
+
+(* IF THEN ELSE. Anapedia: ELSE is always present in examples; CORPUS: 3,417
+   of 3,418 IFs have ELSE. ELSE IF chains are just nested if_expr in the
+   else branch. Spreadsheet form IF(a, b, c) is a function_call named IF
+   and is accepted because Anapedia says the editor accepts it. *)
+
+if_expr        = "IF" , expression , "THEN" , expression , "ELSE" , expression ;
+
+function_call  = function_name , "(" , [ argument , { "," , argument } ] , ")" ;
+function_name  = identifier ;            (* validated against the catalogue, not the grammar *)
+argument       = expression | keyword_arg ;
+keyword_arg    = "ASCENDING" | "DESCENDING" | "MINIMUM" | "MAXIMUM"
+               | "SEQUENTIAL" | "STRICT" | "START" | "END" | "MID"
+               | "LINEAR" | "NONE" | "AVERAGE" | "SUM" | "MIN" | "MAX"
+               | "FIRSTNONBLANK" | "LASTNONBLANK" | "TEXTLIST" | "ANY" | "ALL" ;
+                                          (* bare keywords used by RANK, MOVINGSUM,
+                                             CUMULATE, TIMESUM, SPREAD, PROFILE, etc. *)
+
+(* --- References ---
+   A reference is a dotted path of one to three names:
+     LineItem
+     Module.LineItem
+     List.Item                (list item literal, e.g. Versions.Actual)
+     TIME.'Jan 21'            (time pseudo-list; also TIME.'Current Period',
+                               TIME.All Periods)
+     VERSIONS.Actual          (version pseudo-list; corpus also has
+                               'Finance Versions'.'#5' custom version lists)
+     List.Item.Property       (CORPUS, rare; list property via item)
+   Names are either quoted with single quotes or bare. Bare names may
+   contain spaces and end at an operator, bracket, comma, dot or keyword.
+   Anapedia: quote when the name contains a number, an operator, or the
+   words IF, AND, OR. CORPUS: bare names also appear with digits and ?
+   (e.g. "Month only?", "Is In Phase?") so the tokenizer must treat a
+   trailing ? as part of a bare name. *)
+
+reference      = name , { "." , name } ;
+name           = quoted_name | bare_name ;
+quoted_name    = "'" , { any_char - "'" } , "'" ;   (* no escape; a name cannot contain ' *)
+bare_name      = name_start , { name_char } ;
+name_start     = letter | "_" ;
+name_char      = letter | digit | "_" | " " | "?" | "#" | "%" | "$" | "£" | "€"
+               | "/" | "!" | "|" | "@" | "◀" | "▶" ;
+               (* CORPUS: bare names in production models carry ?, %, #, /, |;
+                  a bare name never contains an operator character that would
+                  otherwise be a token: + - * & = < > ( ) [ ] , : . *)
+
+(* --- Literals --- *)
+
+number         = digit , { digit } , [ "." , digit , { digit } ] ;
+string         = '"' , { any_char - '"' } , '"' ;
+
+identifier     = letter , { letter | digit | "_" } ;
+letter         = "A" | ... | "Z" | "a" | ... | "z" ;
+digit          = "0" | ... | "9" ;
+
+(* --- Tokenizer notes (not expressible in EBNF) ---
+   1. Keywords IF THEN ELSE AND OR NOT TRUE FALSE BLANK and the clause kinds
+      are keywords only when they appear as a whole word outside quotes.
+      A bare name that would otherwise swallow a keyword stops before it:
+      "Lock? THEN" tokenises as name("Lock?") kw(THEN).
+   2. Bare-name scanning is greedy across spaces but must back off trailing
+      spaces and must stop at a dot that is followed by a name (module.line
+      item). A dot inside a bare name that is not followed by a name is
+      part of the name only when quoted (corpus: 'Prime Time.' is quoted).
+   3. Function-call detection: identifier immediately followed by "(" is a
+      function call; "Name (" with a space is a bare name followed by a
+      parenthesised expression only if the name is not in the catalogue.
+      CORPUS has custom-looking calls (GBP(, LRP(, SAG() which are line
+      items whose bare names end just before "(" and whose next token is a
+      parenthesised sub-expression, e.g. "GBP (Values)"? No: inspection
+      shows these are bare names like "GBP (Millions)" where the
+      parenthesis is part of the name. The tokenizer therefore treats
+      "(" ... ")" immediately after a non-catalogue identifier as part of a
+      bare name when the content is not a valid expression. The parser
+      resolves this by trying the catalogue first.
+   4. Whitespace including newlines is insignificant outside quotes.
+*)

@@ -1,0 +1,3 @@
+corpus/derived/
+*.pyc
+__pycache__/
