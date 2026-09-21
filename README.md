@@ -89,6 +89,34 @@ modules added, 40 removed (an entire scenario-modelling block retired),
 264 line items added, 250 removed, 8 renames detected, 61 formula
 changes, top change 178 downstream line items.
 
+## Lint layer
+
+`lint.py` runs 19 rules and reports findings that name the object. Rules
+carry their source: `ANAPLAN` for the ones taken from Anaplan's own Model
+Optimization Checklist with its threshold (more than 50 line items, more
+than 10 IFs, summaries on, text formats, subsidiary views used for
+calculation, daisy chains, FINDITEM and text joins in large line items,
+unchanging functions in calculation modules); `FORMULA` for facts from
+the parse tree (SUM mixed with LOOKUP or SELECT in one bracket,
+unguarded division, hard-coded constants, very long formulas, parse
+failures); `GRAPH` for structure (circular references, hub line items,
+unreferenced calculations, empty modules, notes coverage).
+
+```python
+from anaplan_grammar.lint import lint, render_markdown
+res = lint(model, graph, overrides={"A-LI-COUNT": {"max_line_items": 40}})
+res.counts            # by severity and by rule
+render_markdown(res)  # findings grouped by rule, worst first
+res.to_dict()         # JSON
+```
+
+Calibrated on the two real models: 57 findings on the 900-line-item model
+(4 deliberate cycles, 5 unguarded divides, 4 daisy chains), 3,544 on the
+17,000-line-item one (127 SUM-with-LOOKUP brackets, 235 unguarded
+divides, 98 modules over 50 line items, 88 cycles of which 1 is not a
+PREVIOUS-based balance). Thresholds are per-rule and overridable because
+every CoE has its own conventions.
+
 ## Layout
 
 ```
@@ -101,6 +129,7 @@ src/anaplan_grammar/
   model.py                  Line Items + Modules exports -> Model
   graph.py                  dependency graph: impact, lineage, hubs, unused, cycles, chains
   diff.py                   two models -> change set with blast radius; Markdown and JSON
+  lint.py                   19 rules (Anaplan checklist, formula, graph) -> findings; Markdown and JSON
 corpus/
   extract.py                line-item export -> formulas.jsonl (not committed)
   profile.py                what the corpus contains, before any grammar
@@ -111,6 +140,7 @@ corpus/
 tests/test_grammar.py       fictional formulas covering every corpus shape
 tests/test_graph.py         graph queries on the fictional Caldergate Planning model
 tests/test_diff.py          diff on mutated copies of the fixture
+tests/test_lint.py          lint against the faults planted in the fixture
 tests/fixtures/             Caldergate Planning line-item and module exports (fictional)
 ```
 
