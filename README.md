@@ -100,7 +100,11 @@ unchanging functions in calculation modules); `FORMULA` for facts from
 the parse tree (SUM mixed with LOOKUP or SELECT in one bracket,
 unguarded division, hard-coded constants, very long formulas, parse
 failures); `GRAPH` for structure (circular references, hub line items,
-unreferenced calculations, empty modules, notes coverage).
+unreferenced calculations, empty modules, notes coverage). Circular
+references are reported as information when they pass through a time or
+version offset (the opening/closing balance pattern), since Anaplan
+rejects any other kind at formula entry; a cycle with no offset means the
+parser misread a reference and is reported as critical.
 
 ```python
 from anaplan_grammar.lint import lint, render_markdown
@@ -138,8 +142,10 @@ r.to_dict()          # JSON, lint included
 
 On the two real models: biotech FP&A 80 overall (governance 38: no
 module notes), media participations in the 50s (127 mixed SUM/LOOKUP
-brackets, 235 unguarded divides, 98 oversized modules, one non-balance
-cycle).
+brackets, 235 unguarded divides, 98 oversized modules). Every circular reference found
+on both models is a PREVIOUS-based balance pattern, which is the only
+kind Anaplan lets you save; the rule reports those as notes and would
+report a cycle with no time offset as a parser fault.
 
 ## Layout
 

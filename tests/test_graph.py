@@ -60,7 +60,7 @@ def test_unused_cycles_hubs_chains():
     assert ("CAL03 Opex", "Unused Helper") in g.unused()
     assert ("CAL02 Revenue", "Net Revenue") not in g.unused()
     cyc = g.cycles()
-    assert len(cyc) == 1 and set(cyc[0]) == {("CAL04 Margin", "Cycle A"), ("CAL04 Margin", "Cycle B")}
+    assert len(cyc) == 1 and set(cyc[0]) == {("CAL04 Margin", "Opening Cash"), ("CAL04 Margin", "Closing Cash")}
     hubs = dict(g.hubs(5))
     assert hubs[("CAL02 Revenue", "Net Revenue")] == 3 and hubs[("CAL02 Revenue", "Gross Revenue")] == 3
     chains = g.daisy_chains(min_len=3)

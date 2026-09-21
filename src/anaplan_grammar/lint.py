@@ -285,15 +285,30 @@ def r_parse(m: Model, g: Graph, t):
         yield Finding("F-PARSE", "critical", k[0], k[1], err[:120], "Report the formula shape.", "FORMULA")
 
 
-@rule("G-CYCLE", "Circular reference", "critical", "GRAPH",
-      "Line items that depend on each other. Anaplan allows some (PREVIOUS-based bf/cf) but each one should be deliberate.")
+TIME_OFFSET_FNS = ("PREVIOUS", "NEXT", "LAG", "LEAD", "OFFSET", "CUMULATE", "DECUMULATE", "MOVINGSUM",
+                   "PREVIOUSVERSION", "NEXTVERSION", "POST", "SPREAD", "PROFILE")
+
+
+@rule("G-CYCLE", "Circular reference", "info", "GRAPH",
+      "Line items that depend on each other at the line-item level. Anaplan rejects a direct circular reference at formula entry, "
+      "so a real cycle always passes through a time or version offset (PREVIOUS, LAG, OFFSET, CUMULATE, PREVIOUSVERSION): an "
+      "opening balance from last period's closing balance. Reported as info to confirm it is intended. A cycle with NO such "
+      "function cannot exist in Anaplan; if one appears, the parser has misread a reference and it is reported as critical.")
 def r_cycle(m: Model, g: Graph, t):
     for comp in g.cycles():
         a = comp[0]
-        deliberate = any("PREVIOUS" in (m.line_items[k].formula or "").upper() for k in comp)
-        yield Finding("G-CYCLE", "major" if deliberate else "critical", a[0], a[1],
-                      f"cycle of {len(comp)}: " + ", ".join(f"{x[0]}.{x[1]}" for x in comp[:4]) + (" ..." if len(comp) > 4 else "") + (" (via PREVIOUS)" if deliberate else ""),
-                      "Confirm the cycle is intended (opening/closing balance); otherwise break it.", "GRAPH", str(len(comp)))
+        fns = set()
+        for k in comp:
+            ast = _ast(m.line_items[k])
+            if ast is not None:
+                fns.update(f for f in _calls(ast) if f in TIME_OFFSET_FNS)
+        names = ", ".join(f"{x[0]}.{x[1]}" for x in comp[:4]) + (" ..." if len(comp) > 4 else "")
+        if fns:
+            yield Finding("G-CYCLE", "info", a[0], a[1], f"balance pattern via {'/'.join(sorted(fns))}: {names}",
+                          "Confirm the opening/closing pattern is intended.", "GRAPH", str(len(comp)))
+        else:
+            yield Finding("G-CYCLE", "critical", a[0], a[1], f"cycle with no time offset: {names}",
+                          "Anaplan would reject this; the parser has misread a reference. Report the formulas.", "GRAPH", str(len(comp)))
 
 
 @rule("G-UNUSED", "Line item with a formula that nothing references", "info", "GRAPH",

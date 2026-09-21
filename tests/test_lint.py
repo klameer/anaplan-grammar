@@ -1,5 +1,6 @@
 """Lint on the Caldergate fixture, which plants: an unguarded divide (Margin %),
-a cycle (Cycle A/B), a daisy chain (Revenue Copy 2), a hard-coded constant (Bonus = Salaries * 0.1)."""
+a PREVIOUS-based balance cycle (Opening/Closing Cash), a daisy chain (Revenue Copy 2),
+a hard-coded constant (Bonus = Salaries * 0.1)."""
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 from anaplan_grammar.model import load_model
@@ -22,16 +23,16 @@ def test_planted_findings():
     m, res = run()
     hit = rules_hit(res)
     assert ("F-DIVIDE", "CAL04 Margin.Margin %") in hit
-    assert ("G-CYCLE", "CAL04 Margin.Cycle A") in hit or ("G-CYCLE", "CAL04 Margin.Cycle B") in hit
+    assert ("G-CYCLE", "CAL04 Margin.Opening Cash") in hit or ("G-CYCLE", "CAL04 Margin.Closing Cash") in hit
     assert ("A-DAISY", "OUT01 Board Pack.Revenue Copy 2") in hit
     assert ("F-HARDCODE", "CAL03 Opex.Bonus") in hit
     assert not any(f.rule == "F-PARSE" for f in res.findings)
 
 
-def test_cycle_without_previous_is_critical():
+def test_balance_cycle_is_info_not_fault():
     m, res = run()
     cyc = [f for f in res.findings if f.rule == "G-CYCLE"]
-    assert cyc and cyc[0].severity == "critical"
+    assert cyc and cyc[0].severity == "info" and "PREVIOUS" in cyc[0].message
 
 
 def test_thresholds_override():

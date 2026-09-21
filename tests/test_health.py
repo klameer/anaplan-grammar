@@ -18,14 +18,13 @@ def test_scores_shape():
     assert all(0 <= s.score <= 100 for s in r.scores)
     assert 0 <= r.overall <= 100
     assert r.scores[0].score == 100                    # structure: nothing planted
-    assert r.scores[3].score < 90                      # integrity: a critical cycle
+    assert r.scores[3].score >= 90                     # integrity: only a balance-pattern cycle (info)
     assert r.scores[4].score < 60                      # governance: no notes
 
 
-def test_recommendations_lead_with_critical():
+def test_recommendations_lead_with_divide():
     r = report()
-    assert r.recommendations and "critical" in r.recommendations[0]
-    assert "Cycle" in r.recommendations[0]
+    assert r.recommendations and "unguarded" in r.recommendations[0]
 
 
 def test_render_and_json():

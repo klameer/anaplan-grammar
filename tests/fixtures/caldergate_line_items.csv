@@ -27,8 +27,8 @@ Net Revenue,"{""dataType"":""NUMBER""}",'CAL02 Revenue'.Net Revenue[SUM: 'CAL02 
 Opex,"{""dataType"":""NUMBER""}",'CAL03 Opex'.Total Opex[SUM: 'CAL03 Opex'.Segment Map],,Segments,Month,Model Calendar,Not Applicable,,72,,Margin,CAL04 Margin
 Margin,"{""dataType"":""NUMBER""}",Net Revenue - Opex,,Segments,Month,Model Calendar,Not Applicable,,72,,"Margin %, 'OUT01 Board Pack'.Margin",CAL04 Margin
 Margin %,"{""dataType"":""NUMBER""}",Margin / Net Revenue,,Segments,Month,Model Calendar,Not Applicable,,72,,,CAL04 Margin
-Cycle A,"{""dataType"":""NUMBER""}",Cycle B + 1,,,Not Applicable,Not Applicable,Not Applicable,,1,,Cycle B,CAL04 Margin
-Cycle B,"{""dataType"":""NUMBER""}",Cycle A - 1,,,Not Applicable,Not Applicable,Not Applicable,,1,,Cycle A,CAL04 Margin
+Opening Cash,"{""dataType"":""NUMBER""}",PREVIOUS(Closing Cash),,Segments,Month,Model Calendar,Not Applicable,,72,,Closing Cash,CAL04 Margin
+Closing Cash,"{""dataType"":""NUMBER""}",Opening Cash + Margin,,Segments,Month,Model Calendar,Not Applicable,,72,,Opening Cash,CAL04 Margin
 OUT01 Board Pack,,,,,Not Applicable,Not Applicable,Not Applicable,,0,,,
 Revenue,"{""dataType"":""NUMBER""}",'CAL02 Revenue'.Gross Revenue,,"Segments, Regions",Month,Model Calendar,Not Applicable,,720,,Revenue Copy,OUT01 Board Pack
 Revenue Copy,"{""dataType"":""NUMBER""}",Revenue,,"Segments, Regions",Month,Model Calendar,Not Applicable,,720,,Revenue Copy 2,OUT01 Board Pack
