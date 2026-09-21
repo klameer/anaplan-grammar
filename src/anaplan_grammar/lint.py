@@ -46,14 +46,28 @@ class Rule:
     description: str
     fn: object
     thresholds: dict = field(default_factory=dict)
+    planual: tuple[str, ...] = ()      # Planual rule ids this rule rests on (support.anaplan.com Planual, chapter 2 Classic)
 
 
 RULES: dict[str, Rule] = {}
 
+# Planual rule ids and titles, fetched 2026-09-21 from support.anaplan.com (Chapter 2: Engine, Classic).
+PLANUAL = {
+    "2.01-01": "Follow a consistent naming convention", "2.01-04": "Use the DISCO methodology for module design",
+    "2.01-06": "Avoid using Subsidiary views", "2.01-08": "Create a system module for all key lists",
+    "2.01-09": "Use Lookup or Constants modules", "2.01-10": "Avoid summary methods unless strictly required",
+    "2.01-12": "Group formulas with like dimensionality", "2.01-20": "Use appropriate dimensions for modules",
+    "2.02-01": "Nested IFs", "2.02-02": "Fewer than 12 expressions in a formula", "2.02-04": "Concatenate text strings with caution",
+    "2.02-05": "Create joins in the smallest hierarchy", "2.02-08": "Avoid combining SUM and LOOKUP",
+    "2.02-12": "Do not hardcode references to list members", "2.02-14": "Avoid using SELECT",
+    "2.02-15": "Avoid using FINDITEM on blank values", "2.02-18": "Break up formulas", "2.02-19": "Avoid daisy-chaining when writing formulas",
+    "2.03-01": "Keep summary options off by default", "2.03-02": "Avoid using TEXT formats", "2.03-07": "Review the calculation effort",
+}
 
-def rule(id, title, severity, source, description, **thresholds):
+
+def rule(id, title, severity, source, description, planual=(), **thresholds):
     def deco(fn):
-        RULES[id] = Rule(id, title, severity, source, description, fn, thresholds)
+        RULES[id] = Rule(id, title, severity, source, description, fn, thresholds, tuple(planual))
         return fn
     return deco
 
@@ -121,7 +135,7 @@ def _token_count(formula: str) -> int:
 # ---------- rules ----------
 
 @rule("A-LI-COUNT", "More than 50 line items in a module", "major", "ANAPLAN",
-      "Modules with many line items are slow to open and hard to maintain. Anaplan's checklist: no more than 50.", max_line_items=50)
+      "Modules with many line items are slow to open and hard to maintain. Anaplan's checklist: no more than 50.", planual=("2.01-12", "2.02-18",), max_line_items=50)
 def r_li_count(m: Model, g: Graph, t):
     for name, mod in m.modules.items():
         n = sum(1 for li in m.by_module(name) if not li.is_header)
@@ -130,7 +144,7 @@ def r_li_count(m: Model, g: Graph, t):
 
 
 @rule("A-SUMMARY-ON", "Summary method on where a formula suggests it is not needed", "minor", "ANAPLAN",
-      "Summaries calculate on every parent; turn them off unless a parent value is used. Flags large number line items with a summary that no formula references.", min_cells=10000)
+      "Summaries calculate on every parent; turn them off unless a parent value is used. Flags large number line items with a summary that no formula references.", planual=("2.01-10", "2.03-01",), min_cells=10000)
 def r_summary(m: Model, g: Graph, t):
     for k, li in m.line_items.items():
         if li.is_header or li.format_type != "NUMBER" or li.cell_count < t["min_cells"]:
@@ -140,7 +154,7 @@ def r_summary(m: Model, g: Graph, t):
 
 
 @rule("A-TEXT-FORMAT", "Text-formatted line item", "minor", "ANAPLAN",
-      "Text line items use more memory and cannot aggregate. Anaplan's checklist: minimise; prefer list-formatted items.", min_cells=50000)
+      "Text line items use more memory and cannot aggregate. Anaplan's checklist: minimise; prefer list-formatted items.", planual=("2.03-02",), min_cells=50000)
 def r_text(m: Model, g: Graph, t):
     for li in m.line_items.values():
         if li.format_type == "TEXT" and li.cell_count > t["min_cells"]:
@@ -148,7 +162,7 @@ def r_text(m: Model, g: Graph, t):
 
 
 @rule("A-SUBSIDIARY", "Subsidiary view on a calculation line item", "major", "ANAPLAN",
-      "A line item whose Applies To differs from its module's is a subsidiary view. Anaplan's checklist: display and export only, never calculation data.")
+      "A line item whose Applies To differs from its module's is a subsidiary view. Anaplan's checklist: display and export only, never calculation data.", planual=("2.01-06",))
 def r_subsidiary(m: Model, g: Graph, t):
     if not m.has_modules_export:
         return
@@ -163,7 +177,7 @@ def r_subsidiary(m: Model, g: Graph, t):
 
 
 @rule("A-DAISY", "Daisy-chain formula", "major", "ANAPLAN",
-      "A references B references C where each is a pure pass-through; the whole sequence recalculates on any change. Anaplan's checklist: never.", min_len=3)
+      "A references B references C where each is a pure pass-through; the whole sequence recalculates on any change. Anaplan's checklist: never.", planual=("2.02-19",), min_len=3)
 def r_daisy(m: Model, g: Graph, t):
     for chain in g.daisy_chains(min_len=t["min_len"]):
         a, b = chain[0], chain[-1]
@@ -172,7 +186,7 @@ def r_daisy(m: Model, g: Graph, t):
 
 
 @rule("A-IF-COUNT", "Formula with more than 10 IF THEN ELSE", "major", "ANAPLAN",
-      "Anaplan's checklist: refactor above 10 IF conditions; use a LOOKUP or Boolean flag line items.", max_ifs=10)
+      "Anaplan's checklist: refactor above 10 IF conditions; use a LOOKUP or Boolean flag line items.", planual=("2.02-01", "2.02-02",), max_ifs=10)
 def r_if_count(m: Model, g: Graph, t):
     for li in m.line_items.values():
         ast = _ast(li)
@@ -184,7 +198,7 @@ def r_if_count(m: Model, g: Graph, t):
 
 
 @rule("A-SYSTEMS-FN", "Unchanging function in a calculation module", "minor", "ANAPLAN",
-      "PARENT(), text joins, START(), CURRENTPERIODSTART() produce values that do not change per cell; Anaplan's checklist: compute once in a systems module.",
+      "PARENT(), text joins, START(), CURRENTPERIODSTART() produce values that do not change per cell; Anaplan's checklist: compute once in a systems module.", planual=("2.01-08", "2.01-09",),
       fns=("PARENT", "START", "END", "CURRENTPERIODSTART", "CURRENTPERIODEND", "ITEM", "NAME", "CODE"))
 def r_systems(m: Model, g: Graph, t):
     for li in m.line_items.values():
@@ -200,7 +214,7 @@ def r_systems(m: Model, g: Graph, t):
 
 
 @rule("A-TEXT-JOIN", "Text concatenation in a large line item", "minor", "ANAPLAN",
-      "Anaplan's checklist: combining text strings takes memory; restructure into systems modules.")
+      "Anaplan's checklist: combining text strings takes memory; restructure into systems modules.", planual=("2.02-04", "2.02-05",))
 def r_text_join(m: Model, g: Graph, t):
     for li in m.line_items.values():
         if li.cell_count < t.get("min_cells", 10000):
@@ -213,7 +227,7 @@ def r_text_join(m: Model, g: Graph, t):
 
 
 @rule("A-FINDITEM", "FINDITEM in a large line item", "minor", "ANAPLAN",
-      "Anaplan's checklist: FINDITEM is expensive; minimise and null-check first.")
+      "Anaplan's checklist: FINDITEM is expensive; minimise and null-check first.", planual=("2.02-15",))
 def r_finditem(m: Model, g: Graph, t):
     for li in m.line_items.values():
         if li.cell_count < t.get("min_cells", 10000):
@@ -226,7 +240,7 @@ def r_finditem(m: Model, g: Graph, t):
 
 
 @rule("F-MIXED-CLAUSE", "SUM and LOOKUP (or SELECT) in one bracket", "major", "FORMULA",
-      "Anapedia: never combine SUM with LOOKUP or SELECT in the same expression; the engine builds a large intermediate mapping.")
+      "Anapedia: never combine SUM with LOOKUP or SELECT in the same expression; the engine builds a large intermediate mapping.", planual=("2.02-08", "2.02-14",))
 def r_mixed(m: Model, g: Graph, t):
     bad = {("LOOKUP", "SUM"), ("SELECT", "SUM"), ("LOOKUP", "SELECT")}
     for li in m.line_items.values():
@@ -240,7 +254,7 @@ def r_mixed(m: Model, g: Graph, t):
 
 
 @rule("F-HARDCODE", "Hard-coded constant in a formula", "minor", "FORMULA",
-      "Numbers other than 0, 1, 100, 12 inside formulas are assumptions that belong in an input line item.", ignore=("0", "1", "100", "12", "1000", "1000000", "2", "3", "4", "-1", "0.5"))
+      "Numbers other than 0, 1, 100, 12 inside formulas are assumptions that belong in an input line item.", planual=("2.01-09", "2.02-12",), ignore=("0", "1", "100", "12", "1000", "1000000", "2", "3", "4", "-1", "0.5"))
 def r_hardcode(m: Model, g: Graph, t):
     for li in m.line_items.values():
         ast = _ast(li)
@@ -255,7 +269,7 @@ def r_hardcode(m: Model, g: Graph, t):
 
 
 @rule("F-LONG", "Very long formula", "minor", "FORMULA",
-      "Anaplan's checklist: a formula should be explainable in one sentence.", max_tokens=120)
+      "Anaplan's checklist: a formula should be explainable in one sentence.", planual=("2.02-02", "2.02-18",), max_tokens=120)
 def r_long(m: Model, g: Graph, t):
     for li in m.line_items.values():
         if not li.formula:
@@ -396,7 +410,8 @@ def render_markdown(res: LintResult, max_per_rule: int = 15) -> str:
         grouped[f.rule].append(f)
     for rid in sorted(grouped, key=lambda r: (SEV_ORDER[RULES[r].severity], r)):
         r = RULES[rid]; fs = grouped[rid]
-        out += [f"## {rid}: {r.title} ({len(fs)})", "", f"*{r.description}* Source: {r.source}.", "",
+        pl = ("; Planual " + ", ".join(f"{i} {PLANUAL.get(i, '')}" for i in r.planual)) if r.planual else ""
+        out += [f"## {rid}: {r.title} ({len(fs)})", "", f"*{r.description}* Source: {r.source}{pl}.", "",
                 "| Object | Finding | Fix |", "|---|---|---|"]
         for f in fs[:max_per_rule]:
             out.append(f"| {f.object} | {f.message} | {f.fix} |")

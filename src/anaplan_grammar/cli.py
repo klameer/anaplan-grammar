@@ -26,6 +26,10 @@ from .graph import build_graph
 from . import diff as diffmod
 from . import lint as lintmod
 from . import health as healthmod
+from .estate import load_estate
+from .spec import build_spec
+from . import opinion as opmod
+from .review import render_review
 
 
 def _key(s: str) -> tuple[str, str]:
@@ -174,6 +178,47 @@ def cmd_health(args):
     _emit(args, healthmod.render_markdown(r), r.to_dict())
 
 
+def _estate(args):
+    return load_estate(getattr(args, "lists", None), getattr(args, "actions", None), getattr(args, "ux", None))
+
+
+def cmd_spec(args):
+    m = _load(args); g = build_graph(m); e = _estate(args)
+    s = build_spec(m, g, e)
+    _emit(args, s.markdown(), s.facts)
+
+
+def cmd_opinion(args):
+    m = _load(args); g = build_graph(m); e = _estate(args)
+    s = build_spec(m, g, e); lr = lintmod.lint(m, g)
+    if args.mode == "prompt":
+        _emit(args, opmod.prompt(s, lr)); return
+    if args.mode == "ingest":
+        txt = Path(args.response).read_text(encoding="utf-8")
+        op = opmod.ingest(s, lr, m, txt, provider=args.provider or "ingested")
+    else:
+        import os
+        key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
+        if not key:
+            sys.exit("set ANTHROPIC_API_KEY or pass --api-key; or use `opinion prompt` then `opinion ingest`")
+        op = opmod.run(s, lr, m, key, model_id=args.llm, critique=not args.no_critique)
+    _emit(args, opmod.render_markdown(op), op.to_dict())
+
+
+def cmd_review(args):
+    m = _load(args); g = build_graph(m); e = _estate(args)
+    s = build_spec(m, g, e); lr = lintmod.lint(m, g, overrides=_overrides(args)); h = healthmod.health(m, g, lr)
+    op = None
+    if args.response:
+        op = opmod.ingest(s, lr, m, Path(args.response).read_text(encoding="utf-8"), provider=args.provider or "ingested")
+    md = render_review(s, h, op, signed_by=args.signed_by or "")
+    if args.html:
+        from .htmlout import md_to_html
+        Path(args.html).write_text(md_to_html(md, f"{m.name} Architect's Review"), encoding="utf-8")
+        print(f"wrote {args.html}")
+    _emit(args, md, {"spec": s.facts, "health": h.to_dict(), "opinion": op.to_dict() if op else None})
+
+
 def cmd_stats(args):
     m = _load(args); g = build_graph(m); st = g.stats()
     st["dimensions"] = sorted(m.dimensions)[:50]
@@ -182,9 +227,9 @@ def cmd_stats(args):
 
 
 def cmd_rules(args):
-    rows = [{"id": r.id, "severity": r.severity, "source": r.source, "title": r.title, "thresholds": r.thresholds, "description": r.description}
+    rows = [{"id": r.id, "severity": r.severity, "source": r.source, "title": r.title, "thresholds": r.thresholds, "planual": list(r.planual), "description": r.description}
             for r in lintmod.RULES.values()]
-    lines = [f"{r['id']:16s} {r['severity']:8s} {r['source']:8s} {r['title']}" + (f"   {r['thresholds']}" if r['thresholds'] else "") for r in rows]
+    lines = [f"{r['id']:16s} {r['severity']:8s} {r['source']:8s} {r['title']}" + (f"   {r['thresholds']}" if r['thresholds'] else "") + (f"   Planual {', '.join(r['planual'])}" if r['planual'] else "") for r in rows]
     _emit(args, "\n".join(lines), rows)
 
 
@@ -224,6 +269,28 @@ def main(argv=None):
 
     s = sub.add_parser("health", help="the one-page health report"); model_args(s)
     s.add_argument("--threshold", action="append", metavar="RULE:key=value"); s.set_defaults(fn=cmd_health)
+
+    def estate_args(sp):
+        sp.add_argument("--lists", help="General Lists export (CSV)")
+        sp.add_argument("--actions", help="Actions export (CSV)")
+        sp.add_argument("--ux", help="folder of UX page PDFs (names only are used)")
+
+    s = sub.add_parser("spec", help="the as-built specification"); model_args(s); estate_args(s); s.set_defaults(fn=cmd_spec)
+
+    s = sub.add_parser("opinion", help="the architect's opinion: prompt | ingest | run"); model_args(s); estate_args(s)
+    s.add_argument("mode", choices=["prompt", "ingest", "run"])
+    s.add_argument("--response", help="ingest: file with the model's JSON response")
+    s.add_argument("--provider", help="ingest: label for who wrote the response")
+    s.add_argument("--api-key", help="run: Anthropic API key (or ANTHROPIC_API_KEY)")
+    s.add_argument("--llm", default="claude-sonnet-5", help="run: model id")
+    s.add_argument("--no-critique", action="store_true", help="run: skip the second, critique pass")
+    s.set_defaults(fn=cmd_opinion)
+
+    s = sub.add_parser("review", help="spec + health + opinion in one document"); model_args(s); estate_args(s)
+    s.add_argument("--response", help="file with an opinion JSON response to include")
+    s.add_argument("--provider"); s.add_argument("--signed-by", help="name to put on the cover")
+    s.add_argument("--html", help="also write a self-contained HTML page here")
+    s.add_argument("--threshold", action="append", metavar="RULE:key=value"); s.set_defaults(fn=cmd_review)
 
     s = sub.add_parser("stats", help="graph statistics"); model_args(s); s.set_defaults(fn=cmd_stats)
     s = sub.add_parser("rules", help="list the lint rules"); s.add_argument("--json", action="store_true"); s.add_argument("--out"); s.set_defaults(fn=cmd_rules)

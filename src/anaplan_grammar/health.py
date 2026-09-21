@@ -196,9 +196,9 @@ def render_markdown(r: HealthReport) -> str:
     out += ["", "## Recommendations", ""]
     for i, rec in enumerate(r.recommendations, 1):
         out.append(f"{i}. {rec}")
-    out += ["", "## Findings by rule", "", "| Rule | Severity | Source | Count |", "|---|---|---|---|"]
+    out += ["", "## Findings by rule", "", "| Rule | Severity | Source | Planual | Count |", "|---|---|---|---|---|"]
     for rid, n in sorted(r.lint.counts["by_rule"].items(), key=lambda kv: -kv[1]):
         rr = RULES[rid]
-        out.append(f"| {rid} {rr.title} | {rr.severity} | {rr.source} | {n} |")
+        out.append(f"| {rid} {rr.title} | {rr.severity} | {rr.source} | {', '.join(rr.planual)} | {n} |")
     out += ["", "Full findings: run the lint report. Rules and thresholds: `anaplan_grammar.lint.RULES`.", ""]
     return "\n".join(out)

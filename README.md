@@ -147,6 +147,38 @@ on both models is a PREVIOUS-based balance pattern, which is the only
 kind Anaplan lets you save; the rule reports those as notes and would
 report a cycle with no time offset as a parser fault.
 
+## The architect's review
+
+The deliverable the layers add up to. Three parts in one document:
+
+1. **As-built specification** (`spec.py`), computed from the exports: DISCO
+   layout and module families with the flows between them, the
+   dimensional design (hierarchies, flat lists, where each dimension is
+   used, where the cube is widest), data in and out (imports by target,
+   exports by source, processes), how versions, time and currency are
+   handled, the calculation chain behind every export and output module,
+   the systems layer, documentation as found, and what the exports do
+   not show. Needs the Lists and Actions exports as well; UX page names
+   are read from a folder of page PDFs if present.
+2. **Health report** (`health.py`), with each rule cross-referenced to the
+   Planual rule it rests on (chapter 2, Classic; ids in `lint.PLANUAL`).
+3. **Opinion** (`opinion.py`): design decisions and what they cost, a risk
+   register, options at three levels of effort, what to automate and what
+   to leave alone, questions for the builder. Written by a model from
+   parts 1 and 2, never from raw exports. Every claim carries refs; a
+   validator drops any claim naming an object the model does not have
+   and downgrades partly-supported claims to questions. Bring your own
+   Anthropic key (`opinion run`), or `opinion prompt` for any model or a
+   person and `opinion ingest` to validate the response. Temperature 0,
+   observations sorted, so two runs diff cleanly.
+
+```
+anaplan-grammar review line_items.csv --modules modules.csv --lists lists.csv --actions actions.csv --ux "UX Pages"     --name "My model" --response opinion.json --html review.html
+```
+
+`review.py` assembles the document; `htmlout.py` renders it as a page.
+The cover says "unsigned" and what a signed review adds.
+
 ## Command line
 
 `pip install .` gives you `anaplan-grammar` (or `python -m anaplan_grammar.cli`).
@@ -182,6 +214,11 @@ src/anaplan_grammar/
   diff.py                   two models -> change set with blast radius; Markdown and JSON
   lint.py                   19 rules (Anaplan checklist, formula, graph) -> findings; Markdown and JSON
   health.py                 five scores + one-page report from lint, graph and stats
+  estate.py                 Lists, Actions and UX-page exports -> Estate
+  spec.py                   the as-built specification, eight sections + machine-readable facts
+  opinion.py                the architect's opinion: prompt, run (Anthropic), ingest; reference validator
+  review.py                 spec + health + opinion -> one document
+  htmlout.py                Markdown -> self-contained HTML page
   cli.py                    the anaplan-grammar command
 corpus/
   extract.py                line-item export -> formulas.jsonl (not committed)
@@ -196,6 +233,7 @@ tests/test_diff.py          diff on mutated copies of the fixture
 tests/test_lint.py          lint against the faults planted in the fixture
 tests/test_health.py        scores, recommendations and rendering on the fixture
 tests/test_cli.py           every command against the fixture, text and JSON
+tests/test_spec_opinion.py  spec sections and facts, Planual cross-refs, validator, review assembly
 tests/fixtures/             Caldergate Planning line-item and module exports (fictional)
 ```
 
