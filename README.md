@@ -66,6 +66,29 @@ item model, where the residuals are `COLLECT()` (needs the line-item
 subset export) and references Anaplan's column itself omits. Details in
 [corpus/README.md](corpus/README.md).
 
+## Diff layer
+
+`diff.py` compares two models loaded from exports: modules added and
+removed, line items added, removed, renamed (same formula tree or same
+input shape in the same module) and changed (formula compared at tree
+level, so whitespace and quoting are not changes; plus format, applies-to,
+time scale, versions, summary). Every change carries its blast radius
+from the after-model's graph, and the list is sorted by it, so a reviewer
+reads the change that touches 178 line items across 30 modules first.
+
+```python
+from anaplan_grammar.diff import diff_models, render_markdown
+d = diff_models(before_model, after_model)
+d.summary            # counts
+render_markdown(d)   # the review table
+d.to_dict()          # JSON
+```
+
+Run on a real model nine months apart (biotech FP&A, Jan to Oct 2025): 30
+modules added, 40 removed (an entire scenario-modelling block retired),
+264 line items added, 250 removed, 8 renames detected, 61 formula
+changes, top change 178 downstream line items.
+
 ## Layout
 
 ```
@@ -77,6 +100,7 @@ src/anaplan_grammar/
   unparse.py                AST -> formula text (round-trip tested)
   model.py                  Line Items + Modules exports -> Model
   graph.py                  dependency graph: impact, lineage, hubs, unused, cycles, chains
+  diff.py                   two models -> change set with blast radius; Markdown and JSON
 corpus/
   extract.py                line-item export -> formulas.jsonl (not committed)
   profile.py                what the corpus contains, before any grammar
@@ -86,6 +110,7 @@ corpus/
   README.md                 sources, counts, parse-rate history
 tests/test_grammar.py       fictional formulas covering every corpus shape
 tests/test_graph.py         graph queries on the fictional Caldergate Planning model
+tests/test_diff.py          diff on mutated copies of the fixture
 tests/fixtures/             Caldergate Planning line-item and module exports (fictional)
 ```
 

@@ -59,6 +59,7 @@ class Model:
     line_items: dict[tuple[str, str], LineItem] = field(default_factory=dict)
     # dimension names seen in Applies To (lists, subsets, pseudo-lists)
     dimensions: set[str] = field(default_factory=set)
+    has_modules_export: bool = False
 
     def by_module(self, module: str) -> list[LineItem]:
         return [li for li in self.line_items.values() if li.module == module]
@@ -93,6 +94,18 @@ def _fmt(s: str) -> str:
         return s[:20]
 
 
+def _summary(s: str) -> str:
+    """Summary column is JSON in newer exports ({"summaryMethod":"SUM",...}); reduce to 'SUM' / 'NONE' / 'SUM;time=NONE'."""
+    if not s:
+        return ""
+    try:
+        j = json.loads(s)
+    except Exception:
+        return s[:40]
+    m, t = j.get("summaryMethod", ""), j.get("timeSummaryMethod", "")
+    return m if j.get("timeSummarySameAsMainSummary", True) or t == m else f"{m};time={t}"
+
+
 def _int(s: str) -> int:
     try:
         return int(str(s).replace(",", ""))
@@ -121,7 +134,7 @@ def load_line_items(path: str | Path, model: Model) -> None:
                 module=module, name=name, formula=formula, format_type=_fmt(fmt),
                 applies_to=_split_applies(row.get("Applies To", "")),
                 time_scale=row.get("Time Scale", ""), versions=row.get("Versions", ""),
-                summary=(row.get("Summary") or "")[:80], cell_count=_int(row.get("Cell Count", "0")),
+                summary=_summary(row.get("Summary") or ""), cell_count=_int(row.get("Cell Count", "0")),
                 referenced_by_raw=row.get("Referenced By", "") or "", notes=row.get("Notes", "") or "",
                 is_header=(not fmt and not formula),
             )
@@ -131,6 +144,7 @@ def load_line_items(path: str | Path, model: Model) -> None:
 
 
 def load_modules(path: str | Path, model: Model) -> None:
+    model.has_modules_export = True
     with open(path, encoding="utf-8-sig", newline="") as f:
         r = csv.DictReader(f)
         first = r.fieldnames[0]
