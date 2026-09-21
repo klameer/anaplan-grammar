@@ -117,6 +117,30 @@ divides, 98 modules over 50 line items, 88 cycles of which 1 is not a
 PREVIOUS-based balance). Thresholds are per-rule and overridable because
 every CoE has its own conventions.
 
+## Health report
+
+`health.py` turns lint, graph and model statistics into the one-page
+report a partner health check delivers after three days: five category
+scores (structure, formulas, performance, integrity, governance), the
+model at a glance, the ten findings that matter, recommendations in
+priority order, and the findings-by-rule table. Scores are finding
+density per hundred line items through an exponential, so they rank
+findings and track one model over time; they are not for comparing two
+models of different purpose. The cover says "unsigned".
+
+```python
+from anaplan_grammar.health import health, render_markdown
+r = health(model, graph)
+r.overall, [(s.category, s.score) for s in r.scores]
+render_markdown(r)   # the one-pager
+r.to_dict()          # JSON, lint included
+```
+
+On the two real models: biotech FP&A 80 overall (governance 38: no
+module notes), media participations in the 50s (127 mixed SUM/LOOKUP
+brackets, 235 unguarded divides, 98 oversized modules, one non-balance
+cycle).
+
 ## Layout
 
 ```
@@ -130,6 +154,7 @@ src/anaplan_grammar/
   graph.py                  dependency graph: impact, lineage, hubs, unused, cycles, chains
   diff.py                   two models -> change set with blast radius; Markdown and JSON
   lint.py                   19 rules (Anaplan checklist, formula, graph) -> findings; Markdown and JSON
+  health.py                 five scores + one-page report from lint, graph and stats
 corpus/
   extract.py                line-item export -> formulas.jsonl (not committed)
   profile.py                what the corpus contains, before any grammar
@@ -141,6 +166,7 @@ tests/test_grammar.py       fictional formulas covering every corpus shape
 tests/test_graph.py         graph queries on the fictional Caldergate Planning model
 tests/test_diff.py          diff on mutated copies of the fixture
 tests/test_lint.py          lint against the faults planted in the fixture
+tests/test_health.py        scores, recommendations and rendering on the fixture
 tests/fixtures/             Caldergate Planning line-item and module exports (fictional)
 ```
 
