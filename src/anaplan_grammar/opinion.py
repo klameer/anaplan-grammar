@@ -83,17 +83,22 @@ class Opinion:
 
 def material(spec: Spec, lint: LintResult, max_findings_per_rule: int = 12) -> str:
     """What the model is shown. The spec markdown plus a compact findings digest."""
-    parts = [spec.markdown(), "", "# Rule-based findings", "",
-             f"Counts by rule: {json.dumps(lint.counts['by_rule'])}", ""]
+    from .cluster import cluster
+    parts = [spec.markdown(), "", "# Rule-based findings, grouped by pattern", "",
+             f"Counts by rule (raw findings): {json.dumps(lint.counts['by_rule'])}", "",
+             "A pattern is one rule firing on a line item copied across modules, or across the line items of one module. "
+             "Cite patterns by their rule id (finding:RULE) and name the modules and line items they list.", ""]
     grouped = {}
-    for f in lint.findings:
-        grouped.setdefault(f.rule, []).append(f)
-    for rid, fs in grouped.items():
-        parts.append(f"## finding:{rid} ({len(fs)}) severity {fs[0].severity}")
-        for f in fs[:max_findings_per_rule]:
-            parts.append(f"- {f.object}: {f.message}")
-        if len(fs) > max_findings_per_rule:
-            parts.append(f"- ... {len(fs) - max_findings_per_rule} more")
+    for c in cluster(lint.findings):
+        grouped.setdefault(c.rule, []).append(c)
+    for rid, cs in grouped.items():
+        total = sum(c.count for c in cs)
+        parts.append(f"## finding:{rid} ({total} findings in {len(cs)} patterns) severity {cs[0].severity}")
+        for c in cs[:max_findings_per_rule]:
+            ex = c.objects[0] if c.objects else ""
+            parts.append(f"- [{c.count}] {c.label}: {c.message[:120]} (e.g. {ex})")
+        if len(cs) > max_findings_per_rule:
+            parts.append(f"- ... {len(cs) - max_findings_per_rule} more patterns")
         parts.append("")
     return "\n".join(parts)
 
