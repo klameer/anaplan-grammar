@@ -70,7 +70,8 @@ def _emit(args, text: str, data=None):
 
 
 def _load(args, path=None, modules=None):
-    return load_model(path or args.line_items, modules or getattr(args, "modules", None), name=Path(path or args.line_items).stem)
+    name = getattr(args, "name", None) or Path(path or args.line_items).stem
+    return load_model(path or args.line_items, modules or getattr(args, "modules", None), name=name)
 
 
 # ---- commands ----
@@ -196,6 +197,7 @@ def main(argv=None):
         sp.add_argument("line_items", help="Line Items grid export (CSV)")
         if modules:
             sp.add_argument("--modules", help="Modules grid export (CSV); adds module attributes")
+        sp.add_argument("--name", help="model name for the report title")
         sp.add_argument("--json", action="store_true", help="machine-readable output")
         sp.add_argument("--out", help="write output to this file")
 

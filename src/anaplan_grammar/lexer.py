@@ -155,7 +155,7 @@ def tokenize(s: str) -> list[Tok]:
                 k = j + 1
                 while k < n and s[k] == " ":
                     k += 1
-                if k < n and (s[k].isalpha() or s[k] in "_'"):
+                if k < n and (s[k].isalpha() or s[k] in "_'%#"):
                     break
                 j += 1
                 continue

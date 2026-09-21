@@ -69,10 +69,11 @@ def _naming(m: Model) -> dict:
     upper-case code (SYS01, CAL02, 'IN - ', 'OUT - ') and the prefixes seen."""
     real = [n for n, mod in m.modules.items() if mod.line_items and not re.match(r"^[-▼▲=\s#]", n)]
     pat = re.compile(r"^([A-Z]{2,5})\s*[0-9]*\s*[-_ ]")
+    disco = re.compile(r"^([DISCOF])\s+[A-Z]{2,}[A-Za-z0-9_-]*\s")   # "C CALPROJ01 ...", "S SYS00 ...", "O BUD11 ..."
     pref = Counter()
     hit = 0
     for n in real:
-        mm = pat.match(n)
+        mm = disco.match(n) or pat.match(n)
         if mm:
             hit += 1; pref[mm.group(1)] += 1
     return {"modules": len(real), "with_prefix": hit, "share": round(hit / len(real), 2) if real else 0,
@@ -178,7 +179,7 @@ def render_markdown(r: HealthReport) -> str:
     out += ["", "## Model at a glance", "",
             f"| | |", "|---|---|",
             f"| Modules | {st['modules']} |", f"| Line items | {st['line_items']:,} ({st['with_formula']:,} calculated, {st['inputs']:,} input) |",
-            f"| Cells | {st['total_cells']:,} |", f"| Dimensions | {st['dimensions']} |",
+            f"| Cells (as reported by the export) | {st['total_cells']:,} |", f"| Dimensions | {st['dimensions']} |",
             f"| Formula references | {st['edges']:,} edges, {st['module_edges']:,} module-to-module |",
             f"| Circular references | {st['cycles']} |", f"| Pass-through chains | {st['daisy_chains']} |",
             f"| Calculated but unreferenced | {st['unreferenced']:,} |",
