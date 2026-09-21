@@ -69,3 +69,23 @@ def test_prompt_contains_material_and_review_assembles():
     for part in ("Architect's review", "How to read this", "Architect's opinion", "Model health", "As-built specification", "Unsigned"):
         assert part in doc
     assert "Signed: K" in render_review(s, h, op, signed_by="K")
+
+
+def test_readings_feed_the_health_report():
+    m, g, e, s, lr = stack()
+    h = health(m, g, lr)
+    p = opinion.prompt(s, lr, h)
+    assert "# Health scores" in p and "- governance:" in p and "reading: exactly five" in p
+    op = opinion.ingest(s, lr, m, json.dumps([
+        {"kind": "reading", "title": "Formulas", "claim": "One unguarded divide in the margin module.", "refs": ["finding:F-DIVIDE", "CAL04 Margin"]},
+        {"kind": "reading", "title": "not a category", "claim": "stray.", "refs": ["finding:F-DIVIDE"]},
+    ]))
+    r = op.readings()
+    assert list(r) == ["formulas"] and r["formulas"].valid_refs == ["finding:F-DIVIDE", "CAL04 Margin"]
+    assert [o.kind for o in op.observations if o.title == "not a category"] == ["question"]
+    from anaplan_grammar.health import render_markdown as render_health
+    md = render_health(h, r)
+    assert "### Reading the scores" in md and "**Formulas " in md and "unguarded divide" in md
+    doc = render_review(s, h, op)
+    assert doc.count("unguarded divide in the margin") == 1        # in the health section, not repeated in the opinion body
+    assert "Reading the health scores" in opinion.render_markdown(op)

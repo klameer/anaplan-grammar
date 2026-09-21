@@ -27,7 +27,8 @@ from .model import Model
 from .lint import LintResult
 from .spec import Spec
 
-KINDS = ["design_decision", "risk", "option", "automation", "question"]
+KINDS = ["reading", "design_decision", "risk", "option", "automation", "question"]
+CATEGORIES = ["structure", "formulas", "performance", "integrity", "governance"]
 
 SYSTEM = """You are a senior Anaplan solution architect with fifteen years of FP&A and planning-system work, reviewing a model you have never seen from its as-built specification and a rules-based findings list. You write for the model's owner: plain, specific, no flattery, no hedging. You never invent an object. Every claim cites the modules, line items, lists, actions or finding ids it rests on, exactly as named in the material. If the material does not support a claim, you ask a question instead of asserting."""
 
@@ -40,6 +41,7 @@ INSTRUCTIONS = """Produce a JSON array of observations. Each observation:
  "priority": 1 (do first) to 5}
 
 Cover:
+- reading: exactly five, one per health category, title = the category name (structure, formulas, performance, integrity, governance). Say what the score means for THIS model: which patterns drive it, whether the number over- or under-states what a reviewer would conclude and why, and what would move it. Cite the finding ids and the modules named in the patterns. Never restate the number.
 - design_decision: the five to eight decisions that explain how this model is built (dimensional strategy, how currency and versions are handled, how summaries and reports are produced, how data enters and leaves). Say what each decision costs and buys.
 - risk: key-person, calculation, size, change and data risks, each with the evidence.
 - option: three levels: hygiene (days, no design change), restructure (weeks, one layer), rebuild (a quarter, what a clean design would keep). Each with what it fixes and what it risks.
@@ -74,6 +76,10 @@ class Opinion:
             out[o.kind].append(o)
         return out
 
+    def readings(self) -> dict:
+        """category -> Observation, for the health report."""
+        return {o.title: o for o in self.observations if o.kind == "reading"}
+
     def to_dict(self):
         return {"model": self.model_name, "provider": self.provider,
                 "observations": [asdict(o) for o in self.observations], "dropped": self.dropped}
@@ -81,10 +87,23 @@ class Opinion:
 
 # ---------- material ----------
 
-def material(spec: Spec, lint: LintResult, max_findings_per_rule: int = 12) -> str:
-    """What the model is shown. The spec markdown plus a compact findings digest."""
+def material(spec: Spec, lint: LintResult, health=None, max_findings_per_rule: int = 12) -> str:
+    """What the model is shown. The spec markdown, the health scores with the
+    patterns behind each, and a compact findings digest."""
     from .cluster import cluster
-    parts = [spec.markdown(), "", "# Rule-based findings, grouped by pattern", "",
+    parts = [spec.markdown(), ""]
+    if health is not None:
+        parts += ["# Health scores", "",
+                  "Density of finding patterns per 100 line items, weighted by severity, mapped through an exponential; "
+                  "a 300-line-item floor protects small models. Scores rank and track; they do not compare models.", "",
+                  f"Overall {health.overall}. Modules {health.stats['modules']}, line items {health.stats['line_items']}, "
+                  f"notes on modules: see finding:H-NOTES; naming prefix on {int(round(100 * health.naming['naming']))}% of modules.", ""]
+        for s in health.scores:
+            parts.append(f"- {s.category}: {s.score} ({s.patterns} patterns, {s.findings} findings)")
+            for t in s.top:
+                parts.append(f"    - {t[:140]}")
+        parts.append("")
+    parts += ["# Rule-based findings, grouped by pattern", "",
              f"Counts by rule (raw findings): {json.dumps(lint.counts['by_rule'])}", "",
              "A pattern is one rule firing on a line item copied across modules, or across the line items of one module. "
              "Cite patterns by their rule id (finding:RULE) and name the modules and line items they list.", ""]
@@ -103,8 +122,8 @@ def material(spec: Spec, lint: LintResult, max_findings_per_rule: int = 12) -> s
     return "\n".join(parts)
 
 
-def prompt(spec: Spec, lint: LintResult) -> str:
-    return SYSTEM + "\n\n" + INSTRUCTIONS + "\n\n# Material\n\n" + material(spec, lint)
+def prompt(spec: Spec, lint: LintResult, health=None) -> str:
+    return SYSTEM + "\n\n" + INSTRUCTIONS + "\n\n# Material\n\n" + material(spec, lint, health)
 
 
 # ---------- validation ----------
@@ -148,6 +167,12 @@ def validate(obs: list[dict], model: Model, spec: Spec, lint: LintResult) -> tup
             kind = "question" if len(bad) > len(ok) else kind
         if not ok and kind != "question":
             kind = "question"
+        if kind == "reading":
+            # a reading must name its category and rest on findings; otherwise it is a question
+            if title.strip().lower() not in CATEGORIES:
+                kind = "question"
+            else:
+                title = title.strip().lower()
         kept.append(Observation(kind=kind, title=title, claim=claim, refs=refs,
                                 priority=int(o.get("priority", 3) or 3), effort=str(o.get("effort", "") or ""),
                                 valid_refs=ok, dropped_refs=bad))
@@ -173,13 +198,13 @@ def ingest(spec: Spec, lint: LintResult, model: Model, json_text: str, provider:
 CRITIQUE = """Below are observations about an Anaplan model, and the material they were written from. For each observation, check that every sentence is supported by the material and that every ref is an exact name from it. Rewrite any unsupported sentence to what the material does support, or remove it. Remove any ref that is not an exact name. Return the corrected JSON array only."""
 
 
-def run(spec: Spec, lint: LintResult, model: Model, api_key: str, model_id: str = "claude-sonnet-5", critique: bool = True) -> Opinion:
+def run(spec: Spec, lint: LintResult, model: Model, api_key: str, model_id: str = "claude-sonnet-5", critique: bool = True, health=None) -> Opinion:
     try:
         import anthropic
     except ImportError as e:
         raise SystemExit("pip install anthropic, or use `opinion prompt` and `opinion ingest`") from e
     client = anthropic.Anthropic(api_key=api_key)
-    mat = material(spec, lint)
+    mat = material(spec, lint, health)
     first = client.messages.create(model=model_id, max_tokens=8000, temperature=0, system=SYSTEM,
                                    messages=[{"role": "user", "content": INSTRUCTIONS + "\n\n# Material\n\n" + mat}])
     text = "".join(b.text for b in first.content if getattr(b, "type", "") == "text")
@@ -192,21 +217,23 @@ def run(spec: Spec, lint: LintResult, model: Model, api_key: str, model_id: str 
 
 # ---------- rendering ----------
 
-TITLES = {"design_decision": "How the model is built: the decisions and what they cost",
+TITLES = {"reading": "Reading the health scores",
+          "design_decision": "How the model is built: the decisions and what they cost",
           "risk": "Risk register", "option": "Options", "automation": "What to automate, and what not to",
           "question": "Questions for the builder"}
 
 
-def render_markdown(op: Opinion) -> str:
+def render_markdown(op: Opinion, skip_readings: bool = False) -> str:
+    """`skip_readings` when the readings are rendered inside the health report instead."""
     out = [f"# Architect's opinion: {op.model_name}", "",
            f"Written by {op.provider} from the as-built specification and the rule-based findings. "
            f"Every claim cites objects the deterministic layers produced; {len(op.dropped)} claim(s) were removed because they named objects that do not exist.", ""]
     for kind, obs in op.by_kind().items():
-        if not obs:
+        if not obs or (kind == "reading" and skip_readings):
             continue
         out += [f"## {TITLES[kind]}", ""]
         for o in obs:
-            hdr = f"**{o.title}**"
+            hdr = f"**{o.title.capitalize() if o.kind == 'reading' else o.title}**"
             if o.kind == "option" and o.effort:
                 hdr += f" ({o.effort})"
             if o.kind in ("risk", "option"):

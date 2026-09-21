@@ -8,7 +8,8 @@ Categories and what feeds them:
   formulas      IF counts, length, mixed clauses, unguarded divides, hard-codes, parse failures
   performance   summary methods on large items, text formats, FINDITEM/joins/system fns in large items, daisy chains
   integrity     cycles (non-deliberate weighted heavily), unreferenced calculations
-  governance    notes coverage, naming consistency (module prefix convention), DISCO fit
+  governance    notes coverage (half), naming consistency (half: the better of a module
+                prefix convention and DISCO role coverage)
 
 Scoring: each category starts at 100 and loses points per finding,
 weighted by severity and scaled by model size so a 17,000-line-item
@@ -73,14 +74,20 @@ def _naming(m: Model) -> dict:
     real = [n for n, mod in m.modules.items() if mod.line_items and not re.match(r"^[-▼▲=\s#]", n)]
     pat = re.compile(r"^([A-Z]{2,5})\s*[0-9]*\s*[-_ ]")
     disco = re.compile(r"^([DISCOF])\s+[A-Z]{2,}[A-Za-z0-9_-]*\s")   # "C CALPROJ01 ...", "S SYS00 ...", "O BUD11 ..."
+    from .spec import disco_role
     pref = Counter()
     hit = 0
+    roles = 0
     for n in real:
         mm = disco.match(n) or pat.match(n)
         if mm:
             hit += 1; pref[mm.group(1)] += 1
-    return {"modules": len(real), "with_prefix": hit, "share": round(hit / len(real), 2) if real else 0,
-            "prefixes": dict(pref.most_common(12))}
+        if disco_role(n)[0] != "?":
+            roles += 1
+    share = round(hit / len(real), 2) if real else 0
+    disco_share = round(roles / len(real), 2) if real else 0
+    return {"modules": len(real), "with_prefix": hit, "share": share, "disco_share": disco_share,
+            "naming": max(share, disco_share), "prefixes": dict(pref.most_common(12))}
 
 
 def _stats(m: Model, g: Graph) -> dict:
@@ -175,9 +182,9 @@ def health(model: Model, graph: Graph | None = None, lint_result: LintResult | N
             notes = [f for f in fs if f.rule == "H-NOTES"]
             if notes:
                 a, b = notes[0].value.split("/")
-                sc = int(round(100 * (1 - int(a) / max(int(b), 1)) * 0.6 + 100 * nm["share"] * 0.4))
+                sc = int(round(100 * (1 - int(a) / max(int(b), 1)) * 0.5 + 100 * nm["naming"] * 0.5))
             else:
-                sc = int(round(60 + 40 * nm["share"]))
+                sc = int(round(50 + 50 * nm["naming"]))
         cl_cat = by_cat_cl.get(cat, [])
         top = [f"{cl.label}: {cl.message}" for cl in cl_cat[:3]]
         scores.append(Score(cat, sc, len(fs), top, len(cl_cat)))
@@ -187,7 +194,10 @@ def health(model: Model, graph: Graph | None = None, lint_result: LintResult | N
                         _recommend(by_cat, st, clusters), lr, _naming(model), clusters)
 
 
-def render_markdown(r: HealthReport) -> str:
+def render_markdown(r: HealthReport, readings: dict | None = None) -> str:
+    """`readings` maps category -> opinion Observation (kind "reading"): the
+    reviewer's paragraph on what each score means for this model. Without
+    them the table stands alone; the numbers are never explained by hand."""
     st = r.stats
     out = [f"# Model health: {r.model_name}", "",
            f"Generated {r.generated} from the Line Items and Modules exports. Unsigned. "
@@ -196,6 +206,15 @@ def render_markdown(r: HealthReport) -> str:
            "| Category | Score | Patterns | Findings | Top pattern |", "|---|---|---|---|---|"]
     for s in r.scores:
         out.append(f"| {s.category} | **{s.score}** | {s.patterns} | {s.findings} | {s.top[0] if s.top else ''} |")
+    if readings:
+        out += ["", "### Reading the scores", "",
+                "Written by the reviewer from the patterns behind each score; every paragraph cites the finding ids and objects it rests on.", ""]
+        for s in r.scores:
+            o = readings.get(s.category)
+            if not o:
+                continue
+            out += [f"**{s.category.capitalize()} {s.score}.** {o.claim}", "",
+                    "Evidence: " + ", ".join(f"`{x}`" for x in o.valid_refs), ""]
     out += ["", "## Model at a glance", "",
             f"| | |", "|---|---|",
             f"| Modules | {st['modules']} |", f"| Line items | {st['line_items']:,} ({st['with_formula']:,} calculated, {st['inputs']:,} input) |",
@@ -203,7 +222,7 @@ def render_markdown(r: HealthReport) -> str:
             f"| Formula references | {st['edges']:,} edges, {st['module_edges']:,} module-to-module |",
             f"| Circular references | {st['cycles']} |", f"| Pass-through chains | {st['daisy_chains']} |",
             f"| Calculated but unreferenced | {st['unreferenced']:,} |",
-            f"| Naming convention | {r.naming['with_prefix']} of {r.naming['modules']} modules carry a prefix ({', '.join(list(r.naming['prefixes'])[:6])}) |",
+            f"| Naming convention | {r.naming['with_prefix']} of {r.naming['modules']} modules carry a prefix ({', '.join(list(r.naming['prefixes'])[:6])}); DISCO role readable on {int(round(100 * r.naming['disco_share']))}% |",
             "", "Largest modules by cells:", "", "| Module | Cells | Share |", "|---|---|---|"]
     for n, c, p in st["top_modules_by_cells"][:8]:
         out.append(f"| {n} | {c:,} | {p}% |")

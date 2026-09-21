@@ -190,9 +190,9 @@ def cmd_spec(args):
 
 def cmd_opinion(args):
     m = _load(args); g = build_graph(m); e = _estate(args)
-    s = build_spec(m, g, e); lr = lintmod.lint(m, g)
+    s = build_spec(m, g, e); lr = lintmod.lint(m, g); h = healthmod.health(m, g, lr)
     if args.mode == "prompt":
-        _emit(args, opmod.prompt(s, lr)); return
+        _emit(args, opmod.prompt(s, lr, h)); return
     if args.mode == "ingest":
         txt = Path(args.response).read_text(encoding="utf-8")
         op = opmod.ingest(s, lr, m, txt, provider=args.provider or "ingested")
@@ -201,7 +201,7 @@ def cmd_opinion(args):
         key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             sys.exit("set ANTHROPIC_API_KEY or pass --api-key; or use `opinion prompt` then `opinion ingest`")
-        op = opmod.run(s, lr, m, key, model_id=args.llm, critique=not args.no_critique)
+        op = opmod.run(s, lr, m, key, model_id=args.llm, critique=not args.no_critique, health=h)
     _emit(args, opmod.render_markdown(op), op.to_dict())
 
 

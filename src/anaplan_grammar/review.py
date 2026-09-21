@@ -37,6 +37,6 @@ def render_review(spec: Spec, health: HealthReport, opinion: Opinion | None, sig
             for o in top:
                 out.append(f"- **{o.title}.** {o.claim.split('. ')[0]}.")
             out.append("")
-    out += ["---", "", render_opinion(opinion) if opinion else "_No opinion generated._", "", "---", "",
-            render_health(health), "", "---", "", spec.markdown()]
+    out += ["---", "", render_opinion(opinion, skip_readings=True) if opinion else "_No opinion generated._", "", "---", "",
+            render_health(health, opinion.readings() if opinion else None), "", "---", "", spec.markdown()]
     return "\n".join(out)

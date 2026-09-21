@@ -42,3 +42,9 @@ def test_family_merge():
     fam = [c for c in cs if c.key == "family"]
     assert len(fam) == 1 and fam[0].count == 15 and "3 line items × 5 modules" in fam[0].label
     assert not [c for c in cs if c.key == "template"]
+
+
+def test_subsidiary_views_in_one_module_are_one_decision():
+    fs = [f("A-SUBSIDIARY", "C CAL03 Values", f"Flag {i}", f"applies to L{i}, Time in a module on L{i}, Cost, Time; used by {i} formulas") for i in range(5)]
+    cs = cluster(fs)
+    assert len(cs) == 1 and cs[0].key == "module" and cs[0].count == 5

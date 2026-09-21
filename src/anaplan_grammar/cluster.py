@@ -24,11 +24,13 @@ from .lint import Finding, SEV_ORDER
 
 _NUM = re.compile(r"\d[\d,\.]*")
 _QUOTED = re.compile(r"'[^']*'")
+_DIMS = re.compile(r"applies to .*? in a module on [^;:]*")   # subsidiary views: the dimension lists vary, the decision does not
 
 
 def shape(message: str) -> str:
     """Message with numbers and quoted names blanked, so repeats match."""
     s = _QUOTED.sub("'X'", message)
+    s = _DIMS.sub("applies to D in a module on D", s)
     s = _NUM.sub("N", s)
     # object names after 'ending at', 'cycle of', 'in a module on' vary per finding; cut at the first colon
     return s.split(":")[0][:80]
