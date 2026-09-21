@@ -59,3 +59,25 @@ samples per feature. Its 2026-09-21 output drove the grammar:
 | 0.1 first draft | 12,458 / 13,214 | 94.3% | keyword-in-name and '' escape missing |
 | 0.1 + escape + keyword-as-whole-word | 13,001 / 13,214 | 98.4% | clause-kind at end of name |
 | 0.1 + clause-kind only before `:`/`(` | 13,210 / 13,214 | 99.97% | 4 left, one shape |
+| 0.1 + `IF (` classic-first | 13,214 / 13,214 | 100% | |
+
+## Verification (`verify.py`, 2026-09-21)
+
+Parsing is not the same as parsing correctly. Three checks on every
+unique formula:
+
+| Check | Result |
+|---|---|
+| Round trip: `parse(unparse(parse(f))) == parse(f)` | 13,214 / 13,214 |
+| Reference recall: every quoted name in the source appears in a reference path | 13,214 / 13,214 |
+| Keyword sanity: no bare keyword ends up as a name | 13,214 / 13,214 |
+| Function catalogue: every call name is in Anapedia's list | 0 unknown |
+
+Node counts across the corpus: 40,021 references, 14,796 binary ops,
+6,454 function calls, 5,714 bracket clauses, 4,792 IFs, 902 unary ops.
+
+Two things the round trip caught that the parse rate did not: an IF in
+the middle of an expression must be parenthesised when unparsed or the
+tail is swallowed into its ELSE branch; and hand-written chains of a
+hundred-plus `+` terms (every month summed by name) overflow a naive
+recursive unparser.
