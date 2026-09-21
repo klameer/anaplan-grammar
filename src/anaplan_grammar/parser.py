@@ -219,3 +219,27 @@ def references(node, out=None):
         for v in node:
             references(v, out)
     return out
+
+
+def references_ctx(node, out=None, fn=None, argi=None):
+    """Like references() but each item is (path, enclosing_function, arg_index)
+    for refs that are direct arguments of a call, else (path, None, None).
+    Lets a resolver treat FINDITEM(List, ...) / ITEM(List) / PARENT(ITEM(List))
+    first arguments as list names rather than line items."""
+    if out is None:
+        out = []
+    if isinstance(node, dict):
+        t = node.get("t")
+        if t == "ref":
+            out.append((node["path"], fn, argi))
+            return out
+        if t == "call":
+            for i, a in enumerate(node["args"]):
+                references_ctx(a, out, node["f"], i)
+            return out
+        for v in node.values():
+            references_ctx(v, out, None, None)
+    elif isinstance(node, list):
+        for v in node:
+            references_ctx(v, out, None, None)
+    return out

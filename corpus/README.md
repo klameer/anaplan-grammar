@@ -81,3 +81,37 @@ the middle of an expression must be parenthesised when unparsed or the
 tail is swallowed into its ELSE branch; and hand-written chains of a
 hundred-plus `+` terms (every month summed by name) overflow a naive
 recursive unparser.
+
+## Graph layer (`verify_graph.py`, 2026-09-21)
+
+The exports carry Anaplan's own reverse-edge list in the `Referenced By`
+column. The graph built from parsed formulas is scored against it on the
+two exports that pair with a Modules export.
+
+| Model | Line items | Formulas | Edges | Precision | Recall |
+|---|---|---|---|---|---|
+| biotech FP&A, Jan 2025 | 900 | 628 | 853 | 0.998 | 0.994 |
+| media participations, Dec 2025 | 16,987 | 9,175 | 21,737 | 0.938 | 0.972 |
+
+The residuals were read by hand:
+
+- **Missed edges (recall)** are `COLLECT()` line items. COLLECT pulls
+  source line items through a line-item subset; the membership of that
+  subset is not in either export, so those edges cannot be built from
+  formulas. Anaplan lists them; we cannot. Known gap, needs the line-item
+  subset export.
+- **Extra edges (precision)** are real. For `SYS00 Time Settings
+  (Month).Start of Month`, Anaplan's column lists 12 dependents; the graph
+  finds 14, and the two it adds have formulas that plainly reference it.
+  Anaplan's `Referenced By` omits some references. The graph is more
+  complete than the export it is checked against, on this point.
+- Five missed edges on the biotech model are line items whose formula is
+  a constant (`2`, `3`) but which Anaplan lists as referencing another
+  item: a non-formula dependency the export does not explain.
+
+Queries run on both models: impact (one input on the media model reaches
+1,758 line items across 143 modules, 17 hops deep), lineage, hubs,
+unreferenced line items (395 of 900; 8,615 of 16,987, where "unreferenced"
+means by no formula; views and exports are not in these files), cycles
+(4 and 88, all the deliberate cf/bf and beginning/end-of-month kind),
+daisy chains of pure pass-through line items (4 and 81).

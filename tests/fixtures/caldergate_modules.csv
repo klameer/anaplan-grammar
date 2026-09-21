@@ -1,0 +1,8 @@
+,Functional Area,Applies To,Time Scale,Time Range,Versions,Breakback,Users List,Cell Count,Notes,Read Access Driver,Write Access Driver,Data Tags,Managed By,Referenced By,Used in Dashboards,Line Items
+SYS01 Time Settings,System,,Month,Model Calendar,Not Applicable,New Line Items: Off,Show All Users: On,48,,,,,,"'CAL02 Revenue', 'CAL03 Opex'",,"Current Period?, Start of Month"
+SYS00 Model Settings,System,,Not Applicable,Not Applicable,Not Applicable,New Line Items: Off,Show All Users: On,2,,,,,,"'SYS01 Time Settings', 'CAL02 Revenue'",,"Current Period, FX Rate USD"
+INP01 Volumes,Inputs,"Segments, Regions",Month,Model Calendar,Not Applicable,New Line Items: Off,Show All Users: On,795,,,,,,'CAL02 Revenue',,"Units, Price, Discount %"
+CAL02 Revenue,Calculations,"Segments, Regions",Month,Model Calendar,Not Applicable,New Line Items: Off,Show All Users: On,2934,,,,,,"'CAL04 Margin', 'OUT01 Board Pack'",,"Actual or Forecast, Gross Revenue, Discounts, Net Revenue, Revenue USD, Segment"
+CAL03 Opex,Calculations,Departments,Month,Model Calendar,Not Applicable,New Line Items: Off,Show All Users: On,504,,,,,,"'CAL04 Margin', 'OUT01 Board Pack'",,"Actual or Forecast, Salaries, Bonus, Total Opex, Unused Helper"
+CAL04 Margin,Calculations,Segments,Month,Model Calendar,Not Applicable,New Line Items: Off,Show All Users: On,290,,,,,,'OUT01 Board Pack',,"Net Revenue, Opex, Margin, Margin %, Cycle A, Cycle B"
+OUT01 Board Pack,Outputs,"Segments, Regions",Month,Model Calendar,Not Applicable,New Line Items: Off,Show All Users: On,3072,,,,,,,Board Pack,"Revenue, Revenue Copy, Revenue Copy 2, Net Revenue, Opex, Margin"
