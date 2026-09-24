@@ -1,3 +1,5 @@
 corpus/derived/
 *.pyc
 __pycache__/
+corpus/sources.local.json
+.pytest_cache/

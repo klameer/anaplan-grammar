@@ -12,11 +12,20 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 from anaplan_grammar.model import load_model
 from anaplan_grammar.graph import build_graph
 
-D = pathlib.Path.home() / "Downloads"
-PAIRS = [
-    ("biotech-2025-01", D / "Line Items.csv", D / "Modules.csv"),
-    ("media-participations-2025-12", D / "Line Items (14).csv", D / "Modules (1).csv"),
-]
+# Models to score are private and machine-specific, so they live outside the repo:
+#   corpus/sources.local.json with a "pairs" key -> {"pairs": [["label", "Line Items.csv", "Modules.csv"], ...]}
+# or on the command line:  python corpus/verify_graph.py label=line_items.csv,modules.csv ...
+import json as _json
+PAIRS = []
+_local = pathlib.Path(__file__).resolve().parent / "sources.local.json"
+if _local.exists():
+    _cfg = _json.loads(_local.read_text(encoding="utf-8"))
+    PAIRS += [(l, pathlib.Path(li), pathlib.Path(mo)) for l, li, mo in (_cfg.get("pairs", []) if isinstance(_cfg, dict) else [])]
+for _arg in sys.argv[1:]:
+    _label, _, _rest = _arg.partition("=")
+    if _label and "," in _rest:
+        _li, _mo = _rest.split(",", 1)
+        PAIRS.append((_label, pathlib.Path(_li), pathlib.Path(_mo)))
 
 _NAME = r"(?:'(?:[^']|'')*'|[^,']+)"
 _ENTRY = re.compile(rf"\s*({_NAME})(?:\.({_NAME}))?\s*(?:,|$)")

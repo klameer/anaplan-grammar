@@ -11,12 +11,12 @@ The grammar is measured against real formulas, never published.
 | dl-lineitems-14-2025-12 | Line-item export, media participations model, Dec 2025 | 9,175 | 6,260 |
 | dl-fy25 | Line-item export, media production model, FY25 | 7,978 | 976 |
 | dl-fy26 | Line-item export, media production model, FY26 | 7,685 | 219 |
-| exs-1-fpa | Archived FP&A hub model, 2019 to 2025 | 3,816 | 3,023 |
-| exs-2-hr | Archived HR model | 1,124 | 773 |
-| exs-3-dept | Archived department model | 335 | 187 |
-| exs-4-exec | Archived exec model (duplicate of exs-1-fpa) | 3,816 | 0 new |
-| exs-5-clinical | Archived clinical studies model | 92 | 87 |
-| exs-6-pipeline | Archived pipeline project planning model | 1,307 | 1,078 |
+| arch-1-fpa | Archived FP&A hub model, 2019 to 2025 | 3,816 | 3,023 |
+| arch-2-hr | Archived HR model | 1,124 | 773 |
+| arch-3-dept | Archived department model | 335 | 187 |
+| arch-4-exec | Archived exec model (duplicate of arch-1-fpa) | 3,816 | 0 new |
+| arch-5-clinical | Archived clinical studies model | 92 | 87 |
+| arch-6-pipeline | Archived pipeline project planning model | 1,307 | 1,078 |
 | **Total** | 11 exports, 10 distinct models, 3 organisations | **36,612** | **13,214** |
 
 All formulas come from models Karim built or maintained under contract.

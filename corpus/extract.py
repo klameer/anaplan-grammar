@@ -48,19 +48,18 @@ def main(sources):
     print(f"{'TOTAL':30s} {total:6d}  unique={len(seen)}")
 
 if __name__=="__main__":
-    D = pathlib.Path.home()/"Downloads"
-    G = pathlib.Path(r"G:\My Drive\PARA\4_Archive\20250602_EXS Anaplan Winddown")
-    sources = [
-        ("dl-lineitems-2025-01", D/"Line Items.csv"),
-        ("dl-lineitems-1-2025-10", D/"Line Items (1).csv"),
-        ("dl-lineitems-14-2025-12", D/"Line Items (14).csv"),
-        ("dl-fy25", D/"Line Items FY25 csv Format.csv"),
-        ("dl-fy26", D/"Line Items - FY26 csv Format.csv"),
-        ("exs-1-fpa", G/"1 FPA Model"/"line items"/"Line Items.csv"),
-        ("exs-2-hr", G/"2 HR Model Documentation"/"line items"/"Line Items.csv"),
-        ("exs-3-dept", G/"3 Department Model Documentation"/"line items"/"Line Items.csv"),
-        ("exs-4-exec", G/"4 Exec Model Documentation"/"line items"/"Line Items.csv"),
-        ("exs-5-clinical", G/"5 Clinical Studies PoC Documentation"/"line items"/"Line Items.csv"),
-        ("exs-6-pipeline", G/"6 Pipeline Project Planning"/"line items"/"Line Items.csv"),
-    ]
-    main([(l,p) for l,p in sources if p.exists()])
+    # Sources are private and machine-specific, so they live outside the repo:
+    #   corpus/sources.local.json  -> {"sources": [["label", "path/to/Line Items.csv"], ...]}   (gitignored)
+    # or on the command line:  python corpus/extract.py label=path/to/file.csv ...
+    sources = []
+    local = ROOT / "sources.local.json"
+    if local.exists():
+        cfg = json.loads(local.read_text(encoding="utf-8"))
+        sources += [(l, pathlib.Path(pth)) for l, pth in (cfg.get("sources", []) if isinstance(cfg, dict) else cfg)]
+    for arg in sys.argv[1:]:
+        label, _, pth = arg.partition("=")
+        if label and pth:
+            sources.append((label, pathlib.Path(pth)))
+    if not sources:
+        sys.exit("no sources: create corpus/sources.local.json or pass label=path arguments")
+    main([(l, pth) for l, pth in sources if pth.exists()])

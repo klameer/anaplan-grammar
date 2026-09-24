@@ -1,5 +1,9 @@
 # anaplan-grammar
 
+[![tests](https://github.com/klameer/anaplan-grammar/actions/workflows/test.yml/badge.svg)](https://github.com/klameer/anaplan-grammar/actions/workflows/test.yml)
+![python](https://img.shields.io/badge/python-3.10%20to%203.13-blue)
+[![licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 A formal grammar and parser for the Anaplan formula language, which has
 no published grammar. Reverse-engineered from Anapedia and a corpus of
 13,214 unique formulas from ten production models.
@@ -256,10 +260,17 @@ Those are the next layers and they sit on this one. The grammar is
 the three in the corpus; send an anonymised line-item export and the
 parse rate for it goes in the table.
 
+## Related
+
+[anaplan-estate](https://github.com/klameer/anaplan-estate) builds on this
+parser: an action plan, change-impact explorer and evidence report for a
+whole estate of models from their exports, with a hosted upload page.
+See also [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
+
 ## Licence
 
-MIT for the code and grammar. The corpus is private and is not in this
-repository; only the fictional test formulas are.
+MIT for the code and grammar ([LICENSE](LICENSE)). The corpus is private
+and is not in this repository; only the fictional test formulas are.
 
 Karim Lameer, Master Anaplanner, CIMA-qualified.
 [codelessops.com](https://codelessops.com)
