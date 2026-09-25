@@ -1,5 +1,8 @@
 # anaplan-grammar
 
+**Review the project:** [engineering walkthrough](ENGINEERING.md) ·
+[public tests](tests/) · [private corpus measurements and limits](corpus/README.md).
+
 [![tests](https://github.com/klameer/anaplan-grammar/actions/workflows/test.yml/badge.svg)](https://github.com/klameer/anaplan-grammar/actions/workflows/test.yml)
 ![python](https://img.shields.io/badge/python-3.10%20to%203.13-blue)
 [![licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
